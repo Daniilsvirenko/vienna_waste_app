@@ -54,7 +54,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/vienna_waste_model_PRO.tflite
+    - assets/vienna_waste_model_V2.tflite
     - assets/labels.txt
 
   # To add assets to your application, add an assets section, like this:

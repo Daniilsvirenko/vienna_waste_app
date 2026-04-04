@@ -1,5 +1,6 @@
 Altpapier
 Biomuell
 Glas
-Plastik_Dosen
+Plastik_Rigid
+Plastik_Soft
 Restmuell

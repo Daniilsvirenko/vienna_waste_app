@@ -54,7 +54,8 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
   Future<void> _loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_PRO.tflite');
+      // ИЗМЕНЕНИЕ 1: Загружаем новую V2 модель
+      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V2.tflite');
     } catch (e) {
       debugPrint("Error loading model: $e");
     }
@@ -69,7 +70,6 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     }
   }
 
-  // ИЗМЕНЕНИЕ 1: Теперь функция принимает источник (Камера или Галерея)
   Future<void> pickImage(ImageSource source) async {
     if (_isAnalyzing) return;
 
@@ -108,7 +108,8 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       return tensorInput;
     });
 
-    var output = List.filled(1 * 5, 0.0).reshape([1, 5]);
+    // ИЗМЕНЕНИЕ 2: Увеличили размер output до 6 классов
+    var output = List.filled(1 * 6, 0.0).reshape([1, 6]);
 
     _interpreter!.run(input, output);
 
@@ -135,14 +136,15 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         return;
       }
 
+      // ИЗМЕНЕНИЕ 3: Новые 6 категорий и правила сортировки
       switch (category.trim()) {
         case 'Altpapier':
-          // ИЗМЕНЕНИЕ 2: Добавили подсказки про Тетра Пак и грязный картон
           _resultText = 'Altpapier / Karton!\n🔴 Rote Tonne\n\n⚠️ AUSNAHMEN:\nTetra Paks ➡️ 🟡 Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
           _resultColor = Colors.red;
           break;
-        case 'Plastik_Dosen':
-          _resultText = 'Plastik / Metall!\n🟡 Gelbe Tonne';
+        case 'Plastik_Rigid':
+        case 'Plastik_Soft':
+          _resultText = 'Plastik!\n🟡 Gelbe Tonne';
           _resultColor = Colors.amber;
           break;
         case 'Biomuell':
@@ -246,7 +248,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                         _resultText,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 20, // Чуть уменьшили шрифт, чтобы влез длинный текст
+                          fontSize: 20, 
                           fontWeight: FontWeight.bold, 
                           color: _resultColor == Colors.amber ? Colors.orange[800] : 
                                  _resultColor == Colors.grey ? Colors.black87 : _resultColor,
@@ -255,19 +257,18 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                       ),
                 ),
               ),
-              const SizedBox(height: 120), // Сделали отступ побольше для двух кнопок
+              const SizedBox(height: 120), 
             ],
           ),
         ),
       ),
-      // ИЗМЕНЕНИЕ 3: Две кнопки (Камера и Галерея) в ряд
       floatingActionButton: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             FloatingActionButton.extended(
-              heroTag: "camera_btn", // Важно для Flutter, чтобы анимации кнопок не конфликтовали
+              heroTag: "camera_btn",
               onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.camera),
               elevation: _isAnalyzing ? 0 : 6,
               icon: const Icon(Icons.camera_alt),
