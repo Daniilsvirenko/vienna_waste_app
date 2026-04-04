@@ -1,11 +1,29 @@
 import 'dart:io';
-import 'dart:isolate';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart' show rootBundle;
+
+// Обработка изображения без Isolate - достаточно быстро на main thread
+List<List<List<List<double>>>> processImage(Uint8List imageBytes) {
+  img.Image? oriImage = img.decodeImage(imageBytes);
+  if (oriImage == null) throw Exception('Failed to decode image');
+  
+  img.Image resizedImage = img.copyResize(oriImage, width: 224, height: 224);
+
+  var tensorInput = List.generate(1, (i) => List.generate(224, (j) => List.generate(224, (k) => List.generate(3, (l) => 0.0))));  
+  for (int y = 0; y < 224; y++) {
+    for (int x = 0; x < 224; x++) {
+      var pixel = resizedImage.getPixel(x, y);
+      tensorInput[0][y][x][0] = pixel.r.toDouble();
+      tensorInput[0][y][x][1] = pixel.g.toDouble();
+      tensorInput[0][y][x][2] = pixel.b.toDouble();
+    }
+  }
+  return tensorInput;
+}
 
 void main() {
   runApp(const ViennaWasteApp());
@@ -54,7 +72,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
   Future<void> _loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_PRO.tflite');
+      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V3.tflite');
     } catch (e) {
       debugPrint("Error loading model: $e");
     }
@@ -62,22 +80,22 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
   Future<void> _loadLabels() async {
     try {
-      final labelData = await rootBundle.loadString('assets/labels.txt');
+      final labelData = await rootBundle.loadString('assets/labels_v3.txt');
       _labels = labelData.split('\n').where((s) => s.isNotEmpty).toList();
     } catch (e) {
       debugPrint("Error loading labels: $e");
     }
   }
 
-  // ИЗМЕНЕНИЕ 1: Теперь функция принимает источник (Камера или Галерея)
   Future<void> pickImage(ImageSource source) async {
     if (_isAnalyzing) return;
 
     final pickedFile = await picker.pickImage(
       source: source,
-      maxWidth: 400, // Модели нужно 224, поэтому 400 будет более чем достаточно
+      maxWidth: 400,
       maxHeight: 400,
     );
+    
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
@@ -92,48 +110,55 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   }
 
   Future<void> _classifyImage(File imageFile) async {
-    if (_interpreter == null || _labels.isEmpty) return;
-
-    var imageBytes = await imageFile.readAsBytes();
-
-    var input = await Isolate.run(() {
-      img.Image? oriImage = img.decodeImage(imageBytes);
-      img.Image resizedImage = img.copyResize(oriImage!, width: 224, height: 224);
-
-      var tensorInput = List.generate(1, (i) => List.generate(224, (j) => List.generate(224, (k) => List.generate(3, (l) => 0.0))));
-      for (int y = 0; y < 224; y++) {
-        for (int x = 0; x < 224; x++) {
-          var pixel = resizedImage.getPixel(x, y);
-          tensorInput[0][y][x][0] = pixel.r.toDouble();
-          tensorInput[0][y][x][1] = pixel.g.toDouble();
-          tensorInput[0][y][x][2] = pixel.b.toDouble();
-        }
-      }
-      return tensorInput;
-    });
-
-    var output = List.filled(1 * 5, 0.0).reshape([1, 5]);
-
-    _interpreter!.run(input, output);
-
-    List<double> probabilities = (output[0] as List).cast<double>();
-    int maxIndex = 0;
-    double maxProb = probabilities[0];
-    for (int i = 1; i < probabilities.length; i++) {
-      if (probabilities[i] > maxProb) {
-        maxProb = probabilities[i];
-        maxIndex = i;
-      }
+    if (_interpreter == null || _labels.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _resultText = 'Fehler: Modell nicht geladen!\nÜberprüfe die Assets.'; 
+        _resultColor = Colors.red;
+      });
+      return;
     }
 
-    _applyViennaRules(_labels[maxIndex], maxProb);
+    try {
+      var imageBytes = await imageFile.readAsBytes();
+      
+      // Обработка изображения напрямую (достаточно быстро)
+      var input = processImage(imageBytes);
+      
+      // Правильное создание output тензора для 8 классов
+      var output = List.generate(1, (_) => List.filled(8, 0.0));
+      
+      _interpreter!.run(input, output);
+      
+      List<double> probabilities = output[0].cast<double>();
+      int maxIndex = 0;
+      double maxProb = probabilities[0];
+      for (int i = 1; i < probabilities.length; i++) {
+        if (probabilities[i] > maxProb) {
+          maxProb = probabilities[i];
+          maxIndex = i;
+        }
+      }
+      
+      if (!mounted) return;
+      _applyViennaRules(_labels[maxIndex], maxProb);
+    } catch (e) {
+      debugPrint('Error in classification: $e');
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _resultText = 'Fehler bei Analyse';
+        _resultColor = Colors.red;
+      });
+    }
   }
 
   void _applyViennaRules(String category, double probability) {
     setState(() {
       _isAnalyzing = false;
 
-      if (probability < 0.6) {
+      if (probability < 0.65) {
         _resultText = 'Nicht sicher (${(probability*100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
         _resultColor = Colors.grey;
         return;
@@ -141,11 +166,13 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
       switch (category.trim()) {
         case 'Altpapier':
-          // ИЗМЕНЕНИЕ 2: Добавили подсказки про Тетра Пак и грязный картон
-          _resultText = 'Altpapier / Karton!\n🔴 Rote Tonne\n\n⚠️ AUSNAHMEN:\nTetra Paks ➡️ 🟡 Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
+        case 'Papier_Rollen':
+          _resultText = 'Papier / Karton!\n🔴 Rote Tonne\n\n⚠️ AUSNAHMEN:\nTetra Paks ➡️ 🟡 Gelbe Tonne\nSchmutziges Papier ➡️ ⚫ Restmüll';
           _resultColor = Colors.red;
           break;
-        case 'Plastik_Dosen':
+        case 'Plastik_Rigid':
+        case 'Plastik_Soft':
+        case 'Metall':
           _resultText = 'Plastik / Metall!\n🟡 Gelbe Tonne';
           _resultColor = Colors.amber;
           break;
@@ -250,7 +277,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                         _resultText,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 20, // Чуть уменьшили шрифт, чтобы влез длинный текст
+                          fontSize: 20, 
                           fontWeight: FontWeight.bold, 
                           color: _resultColor == Colors.amber ? Colors.orange[800] : 
                                  _resultColor == Colors.grey ? Colors.black87 : _resultColor,
@@ -259,19 +286,18 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                       ),
                 ),
               ),
-              const SizedBox(height: 120), // Сделали отступ побольше для двух кнопок
+              const SizedBox(height: 120), 
             ],
           ),
         ),
       ),
-      // ИЗМЕНЕНИЕ 3: Две кнопки (Камера и Галерея) в ряд
       floatingActionButton: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             FloatingActionButton.extended(
-              heroTag: "camera_btn", // Важно для Flutter, чтобы анимации кнопок не конфликтовали
+              heroTag: "camera_btn",
               onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.camera),
               elevation: _isAnalyzing ? 0 : 6,
               icon: const Icon(Icons.camera_alt),

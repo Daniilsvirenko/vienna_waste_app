@@ -32,8 +32,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
-  tflite_flutter: ^0.11.0
-  image: ^4.1.7          # <-- Добавь вот эту строчку
+  tflite_flutter: ^0.12.0
+  image: ^4.1.7
 
 dev_dependencies:
   flutter_test:
@@ -54,8 +54,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/vienna_waste_model_PRO.tflite
-    - assets/labels.txt
+    - assets/vienna_waste_model_V3.tflite
+    - assets/labels_v3.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:

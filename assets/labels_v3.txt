@@ -1,0 +1,8 @@
+Altpapier
+Biomuell
+Glas
+Metall
+Papier_Rollen
+Plastik_Rigid
+Plastik_Soft
+Restmuell
