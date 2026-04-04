@@ -73,7 +73,11 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   Future<void> pickImage(ImageSource source) async {
     if (_isAnalyzing) return;
 
-    final pickedFile = await picker.pickImage(source: source);
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 400, // Модели нужно 224, поэтому 400 будет более чем достаточно
+      maxHeight: 400,
+    );
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
