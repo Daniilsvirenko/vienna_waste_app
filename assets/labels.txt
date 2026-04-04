@@ -1,0 +1,5 @@
+Altpapier
+Biomuell
+Glas
+Plastik_Dosen
+Restmuell
