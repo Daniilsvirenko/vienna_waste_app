@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'package:flutter/material.dart';
+import "package:flutter/material.dart";
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart' show rootBundle;
+import 'app_colors.dart';
 
 void main() {
   runApp(const ViennaWasteApp());
@@ -13,14 +14,19 @@ void main() {
 
 class ViennaWasteApp extends StatelessWidget {
   const ViennaWasteApp({super.key});
+  static const Color darkGreen = Color(0xFF468044);
+  static const Color darkGreen2 = Color(0xFF339966);
+  static const Color lightGreen = Color(0xFFCCDED0);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mülltrennung Wien',
+      title: 'GreenLens Wien',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.orange,
+        ),
         useMaterial3: true,
       ),
       home: const TrashSorterScreen(),
@@ -40,8 +46,8 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   final picker = ImagePicker();
   Interpreter? _interpreter;
   List<String> _labels = [];
-  
-  String _resultText = 'Müll fotografieren\noder aus Galerie wählen'; 
+
+  String _resultText = 'Müll fotografieren\noder aus Galerie wählen';
   Color _resultColor = Colors.grey;
   bool _isAnalyzing = false;
 
@@ -54,7 +60,6 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
   Future<void> _loadModel() async {
     try {
-      // ИЗМЕНЕНИЕ 1: Загружаем новую V2 модель
       _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V2.tflite');
     } catch (e) {
       debugPrint("Error loading model: $e");
@@ -77,12 +82,12 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
-        _resultText = 'Foto wird analysiert...'; 
+        _resultText = 'Foto wird analysiert...';
         _resultColor = Colors.grey;
         _isAnalyzing = true;
       });
-      
-      await Future.delayed(const Duration(milliseconds: 100)); 
+
+      await Future.delayed(const Duration(milliseconds: 100));
       _classifyImage(_image!);
     }
   }
@@ -108,7 +113,6 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       return tensorInput;
     });
 
-    // ИЗМЕНЕНИЕ 2: Увеличили размер output до 6 классов
     var output = List.filled(1 * 6, 0.0).reshape([1, 6]);
 
     _interpreter!.run(input, output);
@@ -131,12 +135,11 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       _isAnalyzing = false;
 
       if (probability < 0.6) {
-        _resultText = 'Nicht sicher (${(probability*100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
+        _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
         _resultColor = Colors.grey;
         return;
       }
 
-      // ИЗМЕНЕНИЕ 3: Новые 6 категорий и правила сортировки
       switch (category.trim()) {
         case 'Altpapier':
           _resultText = 'Altpapier / Karton!\n🔴 Rote Tonne\n\n⚠️ AUSNAHMEN:\nTetra Paks ➡️ 🟡 Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
@@ -170,14 +173,29 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('💡 Tipps & Wien Regeln', textAlign: TextAlign.center),
-        content: const Text(
-          '1. Das Objekt in die Mitte legen.\n'
-          '2. Neutralen Hintergrund wählen.\n'
-          '3. Nah genug herangehen.\n\n'
-          '⚠️ HINWEIS ZUR KI:\n'
-          'Die KI kann weiche Folien (z.B. Chipstüten) oder Tetra Paks manchmal mit Papier verwechseln. Beachte immer die Warnhinweise!',
-          style: TextStyle(fontSize: 15, height: 1.4),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Tipps & Hinweise', textAlign: TextAlign.center),
+        content: const Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 15, height: 1.4),
+            children: [
+              TextSpan(
+                text: '1. Nur ein Objekt pro Bild\n'
+                    '2. Das Objekt in die Mitte legen\n'
+                    '3. Neutralen Hintergrund wählen\n'
+                    '4. Nah genug herangehen\n\n',
+              ),
+              TextSpan(
+                text: 'HINWEIS ZUR KI:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              TextSpan(
+                text: '\nGreenLens kann Fehler machen. Im Zweifelsfall gelten die offiziellen Trennregeln der Stadt Wien. Sondermüll- oder Problemstoffe'
+                    ' werden nicht von der KI unterstützt!',
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -192,17 +210,35 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], 
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Mülltrennung Wien', style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        backgroundColor: Colors.green.shade200,
+        title: const Text(
+          'GreenLens Wien',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: false,
+        backgroundColor: AppColors.darkGreen,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.library_books_outlined, size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const WasteInfoScreen()),
+              );
+            },
+            tooltip: 'Infoguide: Wiener Tonnen',
+            color: Colors.white,
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline, size: 28),
             onPressed: _showInstructions,
             tooltip: 'Anleitung',
+            color: Colors.white,
           ),
           const SizedBox(width: 10),
         ],
@@ -227,7 +263,6 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-              
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: AnimatedContainer(
@@ -240,24 +275,27 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                     border: Border.all(color: _resultColor.withValues(alpha: 0.5), width: 2),
                     boxShadow: [
                       BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 10, spreadRadius: 2)
-                    ]
+                    ],
                   ),
-                  child: _isAnalyzing 
-                    ? const Center(child: CircularProgressIndicator(color: Colors.green))
-                    : Text(
-                        _resultText,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 20, 
-                          fontWeight: FontWeight.bold, 
-                          color: _resultColor == Colors.amber ? Colors.orange[800] : 
-                                 _resultColor == Colors.grey ? Colors.black87 : _resultColor,
-                          height: 1.4,
+                  child: _isAnalyzing
+                      ? const Center(child: CircularProgressIndicator(color: Colors.green))
+                      : Text(
+                          _resultText,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: _resultColor == Colors.amber
+                                ? Colors.orange[800]
+                                : _resultColor == Colors.grey
+                                    ? Colors.black87
+                                    : _resultColor,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
                 ),
               ),
-              const SizedBox(height: 120), 
+              const SizedBox(height: 120),
             ],
           ),
         ),
@@ -289,6 +327,34 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+}
+
+class WasteInfoScreen extends StatelessWidget {
+  const WasteInfoScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Mülltrennung Info',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: AppColors.darkGreen,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Text(
+            'Mülltrennung info',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
     );
   }
 }
