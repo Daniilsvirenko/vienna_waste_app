@@ -67,6 +67,7 @@ flutter:
   assets:
     - assets/vienna_waste_model_V2.tflite
     - assets/labels.txt
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

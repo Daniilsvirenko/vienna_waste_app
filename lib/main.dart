@@ -142,24 +142,24 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
       switch (category.trim()) {
         case 'Altpapier':
-          _resultText = 'Altpapier / Karton!\n🔴 Rote Tonne\n\n⚠️ AUSNAHMEN:\nTetra Paks ➡️ 🟡 Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
+          _resultText = 'Altpapier / Karton!\n Rote Tonne\n\n⚠ AUSNAHMEN:\nTetra Paks ➡ Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
           _resultColor = Colors.red;
           break;
         case 'Plastik_Rigid':
         case 'Plastik_Soft':
-          _resultText = 'Plastik!\n🟡 Gelbe Tonne';
+          _resultText = 'Plastik!\n Gelbe Tonne';
           _resultColor = Colors.amber;
           break;
         case 'Biomuell':
-          _resultText = 'Biomüll!\n🟤 Braune Tonne';
+          _resultText = 'Biomüll!\n';
           _resultColor = Colors.brown;
           break;
         case 'Restmuell':
-          _resultText = 'Restmüll!\n⚫ Schwarze Tonne';
+          _resultText = 'Restmüll!\n';
           _resultColor = Colors.black87;
           break;
         case 'Glas':
-          _resultText = 'Glas!\n🟢 Buntglas - Grüne Tonne\n⚪ Weißglas - Weiße Tonne';
+          _resultText = 'Altglas\n - Unterscheidung zwischen Bunt- und Weißglas!';
           _resultColor = Colors.teal;
           break;
         default:
@@ -201,6 +201,24 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Verstanden', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showESBNDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('ESBN', textAlign: TextAlign.center),
+        content: const Text('ESBN', textAlign: TextAlign.center),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -258,7 +276,8 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                       : Container(
                           height: 320, width: 320,
                           color: Colors.white,
-                          child: const Icon(Icons.delete_outline, size: 100, color: Colors.grey),
+                          padding: const EdgeInsets.all(40),
+                          child: Image.asset('assets/images/logo_greenlens.png', fit: BoxFit.contain),
                         ),
                 ),
               ),
@@ -301,27 +320,44 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         ),
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            FloatingActionButton.extended(
-              heroTag: "camera_btn",
-              onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.camera),
-              elevation: _isAnalyzing ? 0 : 6,
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Kamera', style: TextStyle(fontWeight: FontWeight.bold)),
-              backgroundColor: _isAnalyzing ? Colors.grey.shade400 : Colors.green.shade600,
-              foregroundColor: Colors.white,
+            Expanded(
+              child: FloatingActionButton.extended(
+                heroTag: "ean_btn",
+                onPressed: _isAnalyzing ? null : _showESBNDialog,
+                elevation: _isAnalyzing ? 0 : 6,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('ESBN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.greenLensBlack,
+                foregroundColor: Colors.white,
+              ),
             ),
-            FloatingActionButton.extended(
-              heroTag: "gallery_btn",
-              onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.gallery),
-              elevation: _isAnalyzing ? 0 : 6,
-              icon: const Icon(Icons.photo_library),
-              label: const Text('Galerie', style: TextStyle(fontWeight: FontWeight.bold)),
-              backgroundColor: _isAnalyzing ? Colors.grey.shade400 : Colors.blue.shade600,
-              foregroundColor: Colors.white,
+            const SizedBox(width: 8),
+            Expanded(
+              child: FloatingActionButton.extended(
+                heroTag: "camera_btn",
+                onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.camera),
+                elevation: _isAnalyzing ? 0 : 6,
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Kamera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : Colors.green.shade600,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FloatingActionButton.extended(
+                heroTag: "gallery_btn",
+                onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.gallery),
+                elevation: _isAnalyzing ? 0 : 6,
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Galerie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.greenLensBlack,
+                foregroundColor: Colors.white,
+              ),
             ),
           ],
         ),
@@ -336,23 +372,172 @@ class WasteInfoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> bins = [
+      {
+        'title': 'Gelbe Tonne',
+        'color': Colors.amber,
+        'image': 'assets/images/gelbeTonne.png',
+        'info': 'Plastikflaschen, Getränkekartons (Tetra Pak), Metalldosen, Joghurtbecher und Plastikverpackungen.',
+      },
+      {
+        'title': 'Altpapier',
+        'color': Colors.red,
+        'image': 'assets/images/AltpapierTonne.png',
+        'info': 'Zeitungen, Magazine, Kataloge, Briefe, Hefte und saubere Kartonverpackungen.',
+      },
+      {
+        'title': 'Biomüll',
+        'color': Colors.brown,
+        'image': 'assets/images/Biomuelltonne.png',
+        'info': 'Obst- und Gemüsereste, Kaffeesatz, Teebeutel, Eierschalen und Gartenabfälle.',
+      },
+      {
+        'title': 'Restmüll',
+        'color': Colors.black87,
+        'image': 'assets/images/Restmuelltonne.png',
+        'info': 'Staubsaugerbeutel, Windeln, verschmutztes Papier, Zigarettenstummel und andere nicht verwertbare Abfälle.',
+      },
+      {
+        'title': 'Altglas',
+        'color': Colors.teal,
+        'image': 'assets/images/Altglascontainer.png',
+        'info': 'Buntglas und Weißglas getrennt entsorgen. Nur Glasverpackungen wie Flaschen und Marmeladegläser.',
+      },
+    ];
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
-          'Mülltrennung Info',
+          'Infoguide: Wiener Tonnen',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.darkGreen,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Text(
-            'Mülltrennung info',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _buildBinTile(context, bins[0])),
+                const SizedBox(width: 16),
+                Expanded(child: _buildBinTile(context, bins[1])),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildBinTile(context, bins[2])),
+                const SizedBox(width: 16),
+                Expanded(child: _buildBinTile(context, bins[3])),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildBinTile(context, bins[4], isWide: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBinTile(BuildContext context, Map<String, dynamic> bin, {bool isWide = false}) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WasteDetailScreen(
+              title: bin['title'],
+              color: bin['color'],
+              info: bin['info'],
+              imagePath: bin['image'],
+            ),
           ),
+        );
+      },
+      child: Container(
+        height: 150,
+        width: isWide ? double.infinity : null,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.black12, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            bin.containsKey('image')
+                ? Image.asset(bin['image'], height: 60, fit: BoxFit.contain)
+                : Icon(bin['icon'], size: 50, color: bin['color']),
+            const SizedBox(height: 8),
+            Text(
+              bin['title'],
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: bin['color'] == Colors.amber ? AppColors.gelbeTonneGelb: bin['color'],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class WasteDetailScreen extends StatelessWidget {
+  final String title;
+  final Color color;
+  final String info;
+  final String? imagePath;
+
+  const WasteDetailScreen({
+    super.key,
+    required this.title,
+    required this.color,
+    required this.info,
+    this.imagePath,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: color,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (imagePath != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0),
+                  child: Image.asset(imagePath!, height: 200, fit: BoxFit.contain),
+                ),
+              ),
+            Text(
+              'Was gehört hier hinein?',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              info,
+              style: const TextStyle(fontSize: 18, height: 1.5),
+            ),
+          ],
         ),
       ),
     );
