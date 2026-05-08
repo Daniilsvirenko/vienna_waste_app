@@ -343,7 +343,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                 elevation: _isAnalyzing ? 0 : 6,
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('Kamera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : Colors.green.shade600,
+                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.darkGreen,
                 foregroundColor: Colors.white,
               ),
             ),
