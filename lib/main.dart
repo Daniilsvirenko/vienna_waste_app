@@ -49,6 +49,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
   String _resultText = 'Müll fotografieren\noder aus Galerie wählen';
   Color _resultColor = Colors.grey;
+  String? _resultImage;
   bool _isAnalyzing = false;
 
   @override
@@ -137,34 +138,41 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       if (probability < 0.6) {
         _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
         _resultColor = Colors.grey;
+        _resultImage = null;
         return;
       }
 
       switch (category.trim()) {
         case 'Altpapier':
-          _resultText = 'Altpapier / Karton!\n Rote Tonne\n\n⚠ AUSNAHMEN:\nTetra Paks ➡ Gelbe Tonne\nSchmutziger Karton (Pizza) ➡️ ⚫ Restmüll';
+          _resultText = 'Altpapier / Karton!\n AUSNAHMEN:\nTetra Paks -> Gelbe Tonne\nSchmutziger Karton (Pizza) -> Restmüll';
           _resultColor = Colors.red;
+          _resultImage = 'assets/images/AltpapierTonne.png';
           break;
         case 'Plastik_Rigid':
         case 'Plastik_Soft':
           _resultText = 'Plastik!\n Gelbe Tonne';
           _resultColor = Colors.amber;
+          _resultImage = 'assets/images/gelbeTonne.png';
           break;
         case 'Biomuell':
           _resultText = 'Biomüll!\n';
           _resultColor = Colors.brown;
+          _resultImage = 'assets/images/Biomuelltonne.png';
           break;
         case 'Restmuell':
           _resultText = 'Restmüll!\n';
           _resultColor = Colors.black87;
+          _resultImage = 'assets/images/Restmuelltonne.png';
           break;
         case 'Glas':
           _resultText = 'Altglas\n - Unterscheidung zwischen Bunt- und Weißglas!';
           _resultColor = Colors.teal;
+          _resultImage = 'assets/images/Altglascontainer.png';
           break;
         default:
           _resultText = 'Nicht erkannt';
           _resultColor = Colors.grey;
+          _resultImage = null;
       }
     });
   }
@@ -182,12 +190,12 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
             children: [
               TextSpan(
                 text: '1. Nur ein Objekt pro Bild\n'
-                    '2. Das Objekt in die Mitte legen\n'
+                    '2. Das Objekt mittig platzieren\n'
                     '3. Neutralen Hintergrund wählen\n'
                     '4. Nah genug herangehen\n\n',
               ),
               TextSpan(
-                text: 'HINWEIS ZUR KI:',
+                text: 'Hinweis zur KI:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               TextSpan(
@@ -298,19 +306,28 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                   ),
                   child: _isAnalyzing
                       ? const Center(child: CircularProgressIndicator(color: Colors.green))
-                      : Text(
-                          _resultText,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: _resultColor == Colors.amber
-                                ? Colors.orange[800]
-                                : _resultColor == Colors.grey
-                                    ? Colors.black87
-                                    : _resultColor,
-                            height: 1.4,
-                          ),
+                      : Column(
+                          children: [
+                            if (_resultImage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: Image.asset(_resultImage!, height: 80, fit: BoxFit.contain),
+                              ),
+                            Text(
+                              _resultText,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: _resultColor == Colors.amber
+                                    ? Colors.orange[800]
+                                    : _resultColor == Colors.grey
+                                        ? Colors.black87
+                                        : _resultColor,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ),
@@ -377,31 +394,106 @@ class WasteInfoScreen extends StatelessWidget {
         'title': 'Gelbe Tonne',
         'color': Colors.amber,
         'image': 'assets/images/gelbeTonne.png',
-        'info': 'Plastikflaschen, Getränkekartons (Tetra Pak), Metalldosen, Joghurtbecher und Plastikverpackungen.',
+        'info': 'Für die Gelbe Tonne geeignet:\n'
+            '• Plastikflaschen (z. B. Speiseöl, Essig, Milchprodukte, Waschmittel, Körperpflege)\n'
+            '• Metallverpackungen (z. B. Konservendosen)\n'
+            '• Getränkeflaschen und -dosen ohne Pfandlogo\n'
+            '• Getränkekartons (Tetra Pak)\n'
+            '• Joghurtbecher\n'
+            '• Folien bzw. Luftpolsterfolien\n'
+            '• (Tiefzieh-)Schalen/Trays (z. B. für Obst, Gemüse, Takeaway)\n'
+            '• Einweggeschirr und -besteck\n'
+            '• Kaffeebecher\n'
+            '• Menüschalen aus Metall (z. B. für Fertiggerichte)\n'
+            '• Verschlüsse und Deckel von Gläsern, Flaschen und Tuben\n'
+            '• Sonstige Verpackungen (außer Glas/Papier)\n\n'
+            'Nicht geeignet:\n'
+            '• Spielzeug, Gießkannen\n'
+            '• Stark verschmutzte Verpackungen (Restmüll)\n'
+            '• Nichtverpackungs-Kunststoffe\n'
+            '• Altpapier- und Glasverpackungen\n\n'
+            'Auf den Mistplatz gehören:\n'
+            '• Große Verpackungen, Kanister, große Folien/Styroporteile\n'
+            '• Holz, Textilien, sperrige Metallteile\n'
+            '• Haushalts- und Elektrogeräte\n\n'
+            'Problemstoffsammlung:\n'
+            '• Motorölflaschen, medizinische Kunststoffe\n'
+            '• Lack-, Spray- und Öldosen',
       },
       {
         'title': 'Altpapier',
         'color': Colors.red,
         'image': 'assets/images/AltpapierTonne.png',
-        'info': 'Zeitungen, Magazine, Kataloge, Briefe, Hefte und saubere Kartonverpackungen.',
+        'info': 'Für den Altpapier-Behälter geeignet:\n'
+            '• Zeitungen, Illustrierte, Kataloge, Prospekte\n'
+            '• Schreibpapier, Kuverts (mit und ohne Sichtfenster)\n'
+            '• Hefte, Telefonbücher\n'
+            '• Unbeschichtete Tiefkühlkartons\n'
+            '• Wellpappe\n'
+            '• Papiersäcke, Kartonagen, Schachteln (bitte entfalten)\n'
+            '• Bücher (Mistplatz-Tipp: 48er-Tandler-Box)\n\n'
+            'Nicht geeignet für den Altpapier-Behälter:\n'
+            '• Milch- und Getränke-Verbundverpackungen (Tetra Paks) muss in die Gelbe Tonne\n'
+            '• Kohle-, Durchschlag- und Thermopapier kommt in den Restmüll\n'
+            '• Taschentücher, Papierhandtücher, Feuchttücher und Küchenrolle kommt in den Restmüll\n'
+            '• Stark verschmutztes Papier kommt in den Restmüll\n'
+            '• Beschichtete Kartonverpackungen kommt in den Restmüll\n'
+            '• Große Kartonagen muss zum Mistplatz',
       },
       {
         'title': 'Biomüll',
         'color': Colors.brown,
         'image': 'assets/images/Biomuelltonne.png',
-        'info': 'Obst- und Gemüsereste, Kaffeesatz, Teebeutel, Eierschalen und Gartenabfälle.',
+        'info': 'Für die Biotonne geeignet:\n'
+            '• Aus dem Garten: Rasenschnitt, Laub, Baum- und Strauchschnitt (bis 8 cm), Ernterückstände, Stauden, Fallobst, Wasserpflanzen\n'
+            '• Aus Küche und Haus: ungewürzte und ungekochte Obst- und Gemüseabfälle, Tee- und Kaffeesud\n'
+            '• Grundsätzlich gilt: Nur Abfälle, die auch kompostiert werden können.\n'
+            '• WICHTIG: Biogene Abfälle bitte OHNE Plastiksackerl (auch kein "Bio-Plastik") einwerfen!\n\n'
+            'Nicht geeignet für die Biotonne:\n'
+            '• Restmüll: Fleisch, Knochen, Eier, Milchprodukte, Speisereste, Windeln, Staubsaugerbeutel, Katzenstreu, gekochte/gewürzte Speisen\n'
+            '• Gelbe Tonne: Verpackungen, Plastiksackerl, Bio-Plastik\n'
+            '• Mistplatz: Erde, große Mengen Grünschnitt, Wurzelstöcke, Äste > 8 cm, behandeltes Holz\n'
+            '• Problemstoffsammlung: Altöle, Batterien, Chemikalien, Lacke, Medikamente',
       },
       {
         'title': 'Restmüll',
         'color': Colors.black87,
         'image': 'assets/images/Restmuelltonne.png',
-        'info': 'Staubsaugerbeutel, Windeln, verschmutztes Papier, Zigarettenstummel und andere nicht verwertbare Abfälle.',
+        'info': 'Für den Restmüll-Behälter geeignet:\n'
+            '• Abfälle ohne gefährliche Inhaltsstoffe, die nicht verwertet werden können\n'
+            '• Beispiele: Windeln, Zahnpasta-Tuben, Schwämme, Staubsaugerbeutel, verschmutztes Papier, Zigarettenstummel, Kehricht\n\n'
+            'Nicht geeignet für den Restmüll-Behälter:\n'
+            '• Mistplatz: Holz, Reifen, Elektrogeräte, Kartonagen, Styropor, Bauschutt, Sperrmüll\n'
+            '• Problemstoffsammlung: Farben, Lacke, Batterien, CDs/DVDs, Speiseöle, Elektrokleingeräte (Handys, elektrische Zahnbürsten)\n'
+            '• Handel: Mehrwegflaschen und -kisten',
       },
       {
         'title': 'Altglas',
         'color': Colors.teal,
         'image': 'assets/images/Altglascontainer.png',
-        'info': 'Buntglas und Weißglas getrennt entsorgen. Nur Glasverpackungen wie Flaschen und Marmeladegläser.',
+        'info': ' Die Altglassammlung erfolgt zum Großteil mit lärmgedämmten Behältern. Diese bestehen aus 2 voneinander getrennten Kammern für Weiß- und Buntglas.\n\n'
+            'Für den Weißglas-Behälter geeignet:\n'
+            '• Ungefärbte Einwegflaschen, Konservengläser\n'
+            '• Ungefärbte Kondensmilch- und Limonadenflaschen\n'
+            '• Ungefärbte Wein- und Spirituosenflaschen\n'
+            '• Ungefärbte Glasflakons\n'
+            '• (Zeichen: grauer Kreis, MA 48 Icon)\n\n'
+            'Für den Weißglas-Behälter nicht geeignet:\n'
+            '• Buntglas: (auch leicht) eingefärbte Verpackungsgläser\n'
+            '• Schraubverschlüsse und Korken\n\n'
+            'Für den Buntglas-Behälter geeignet:\n'
+            '• Gefärbte Einwegflaschen, Konservengläser\n'
+            '• Gefärbte Wein-, Spirituosen- und Limonadenflaschen\n'
+            '• Auch leicht eingefärbtes Glas ist Buntglas\n'
+            '• (Zeichen: grüner Kreis, MA 48 Icon)\n\n'
+            'Für den Buntglas-Behälter nicht geeignet:\n'
+            '• Weißglas: ungefärbtes Glas\n'
+            '• Schraubverschlüsse und Korken\n\n'
+            'Für beide Altglas-Behälter nicht geeignet:\n'
+            '• Restmüll: Geschirr, Vasen, Porzellan, Keramik, Trinkgläser, Glühbirnen, Korken\n'
+            '• Mistplatz: Fenster-, Flach-, Drahtglas, Spiegel, Aquarienglas\n'
+            '• Problemstoffsammlung: Glasgebinde mit giftigem Inhalt (Lacke, Lösungsmittel)\n'
+            '• Altstoffsammlung: Leichtverpackungen, Schraubverschlüsse, Kapseln',
       },
     ];
 
@@ -533,13 +625,33 @@ class WasteDetailScreen extends StatelessWidget {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
             ),
             const SizedBox(height: 16),
-            Text(
-              info,
-              style: const TextStyle(fontSize: 18, height: 1.5),
+            Text.rich(
+              TextSpan(
+                children: _buildInfoSpans(info),
+                style: const TextStyle(fontSize: 18, height: 1.5, color: Colors.black87),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  List<TextSpan> _buildInfoSpans(String text) {
+    List<TextSpan> spans = [];
+    final lines = text.split('\n');
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+      bool isHeader = line.trim().endsWith(':');
+      spans.add(
+        TextSpan(
+          text: line + (i < lines.length - 1 ? '\n' : ''),
+          style: TextStyle(
+            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      );
+    }
+    return spans;
   }
 }
