@@ -33,9 +33,58 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadHistory();
   }
 
+  void _showImageDialog(String imagePath) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.all(20),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.file(
+                  File(imagePath),
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 15),
+              const Text(
+                'Tippen zum Schließen',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'Altpapier':
+        return Colors.red;
+      case 'Gelbe Tonne':
+        return AppColors.gelbeTonneGelb;
+      case 'Biomüll':
+        return Colors.brown;
+      case 'Restmüll':
+        return Colors.black87;
+      case 'Altglas':
+        return Colors.teal;
+      default:
+        return Colors.black87;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Scan-Verlauf', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.darkGreen,
@@ -59,43 +108,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   itemCount: _history.length,
                   itemBuilder: (context, index) {
                     final item = _history[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      elevation: 3,
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.black12, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.all(10),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(item['imagePath']),
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.broken_image, size: 60, color: Colors.grey),
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: GestureDetector(
+                          onTap: () => _showImageDialog(item['imagePath']),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              File(item['imagePath']),
+                              width: 65,
+                              height: 65,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.broken_image, size: 60, color: Colors.grey),
+                            ),
                           ),
                         ),
                         title: Text(
                           item['category'],
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: _getCategoryColor(item['category']),
+                          ),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Sicherheit: ${(item['probability'] * 100).toStringAsFixed(1)}%'),
+                            const SizedBox(height: 4),
                             Text(
-                              item['timestamp'].toString().substring(0, 16),
+                              'Sicherheit: ${(item['probability'] * 100).toStringAsFixed(1)}%',
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                            Text(
+                              item['timestamp'].toString().substring(0, 16).replaceAll('T', ' '),
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ],
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: const Icon(Icons.delete_outline, color: Colors.black),
                           onPressed: () => _deleteEntry(item['id']),
                         ),
                       ),
