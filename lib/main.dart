@@ -48,6 +48,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   List<String> _labels = [];
 
   String _resultText = 'Müll fotografieren\noder aus Galerie wählen';
+  String? _resultSubtitle;
   Color _resultColor = Colors.grey;
   String? _resultImage;
   bool _isAnalyzing = false;
@@ -137,6 +138,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
       if (probability < 0.6) {
         _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
+        _resultSubtitle = null;
         _resultColor = Colors.grey;
         _resultImage = null;
         return;
@@ -144,33 +146,38 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 
       switch (category.trim()) {
         case 'Altpapier':
-          _resultText = 'Altpapier / Karton!\n AUSNAHMEN:\nTetra Paks -> Gelbe Tonne\nSchmutziger Karton (Pizza) -> Restmüll';
+          _resultText = 'Altpapier / Karton!';
+          _resultSubtitle = 'AUSNAHMEN:\nTetra Paks -> Gelbe Tonne\nSchmutziger Karton (Pizza) -> Restmüll';
           _resultColor = Colors.red;
           _resultImage = 'assets/images/AltpapierTonne.png';
           break;
         case 'Plastik_Rigid':
         case 'Plastik_Soft':
-          _resultText = 'Plastik!\n Gelbe Tonne';
+          _resultText = 'Gelbe Tonne';
           _resultColor = Colors.amber;
           _resultImage = 'assets/images/gelbeTonne.png';
           break;
         case 'Biomuell':
-          _resultText = 'Biomüll!\n';
+          _resultText = 'Biomüll!';
+          _resultSubtitle = null;
           _resultColor = Colors.brown;
           _resultImage = 'assets/images/Biomuelltonne.png';
           break;
         case 'Restmuell':
-          _resultText = 'Restmüll!\n';
+          _resultText = 'Restmüll!';
+          _resultSubtitle = null;
           _resultColor = Colors.black87;
           _resultImage = 'assets/images/Restmuelltonne.png';
           break;
         case 'Glas':
-          _resultText = 'Altglas\n - Unterscheidung zwischen Bunt- und Weißglas!';
+          _resultText = 'Altglas';
+          _resultSubtitle = 'Unterscheidung zwischen Bunt- und Weißglas!';
           _resultColor = Colors.teal;
           _resultImage = 'assets/images/Altglascontainer.png';
           break;
         default:
           _resultText = 'Nicht erkannt';
+          _resultSubtitle = null;
           _resultColor = Colors.grey;
           _resultImage = null;
       }
@@ -317,16 +324,30 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                               _resultText,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: _resultColor == Colors.amber
                                     ? Colors.orange[800]
                                     : _resultColor == Colors.grey
                                         ? Colors.black87
                                         : _resultColor,
-                                height: 1.4,
+                                height: 1.2,
                               ),
                             ),
+                            if (_resultSubtitle != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  _resultSubtitle!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.normal,
+                                    color: Colors.black87,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                 ),
