@@ -6,6 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart' show rootBundle;
+import 'app_colors.dart';
+import 'database_helper.dart';
+import 'history_screen.dart';
 import 'app_colors.dart'; // Твой файл с цветами
 
 // 🚀 Image processing helper - optimized for speed
@@ -201,9 +204,21 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     }
   }
 
+  Future<void> _saveToHistory(String category, double probability) async {
+    if (_image == null) return;
+    
+    await DatabaseHelper().insertScan({
+      'imagePath': _image!.path,
+      'category': category,
+      'probability': probability,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
   void _applyViennaRules(String category, double probability) {
     setState(() {
       _isAnalyzing = false;
+      _resultSubtitle = null; // Zurücksetzen, damit alte Hinweise verschwinden
 
       // Улучшенная подсказка при низкой уверенности ИИ
       if (probability < 0.6) {
@@ -218,14 +233,16 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         return;
       }
 
+      String displayCategory = "";
       // ✅ Добавлены новые классы V3: Papier_Rollen и Metall
       switch (category.trim()) {
         case 'Altpapier':
         case 'Papier_Rollen':
           _resultText = 'Altpapier / Karton!';
-          _resultSubtitle = 'AUSNAHMEN:\nTetra Paks -> Gelbe Tonne\nSchmutziger Karton (Pizza) -> Restmüll';
+          _resultSubtitle = 'Ausnahmen:\nTetra Paks kommen in die Gelbe Tonne\nSchmutziger Karton (Pizza) kommt in den Restmüll';
           _resultColor = Colors.red;
           _resultImage = 'assets/images/AltpapierTonne.png';
+          displayCategory = 'Altpapier';
           
           // Вызов контекстной подсказки (интерактивность)
           Future.delayed(const Duration(milliseconds: 600), () {
@@ -239,30 +256,39 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
           _resultSubtitle = 'Plastik & Metallverpackungen';
           _resultColor = Colors.amber;
           _resultImage = 'assets/images/gelbeTonne.png';
+          displayCategory = 'Gelbe Tonne';
           break;
         case 'Biomuell':
           _resultText = 'Biomüll!';
           _resultSubtitle = null;
           _resultColor = Colors.brown;
           _resultImage = 'assets/images/Biomuelltonne.png';
+          displayCategory = 'Biomüll';
           break;
         case 'Restmuell':
           _resultText = 'Restmüll!';
           _resultSubtitle = null;
           _resultColor = Colors.black87;
           _resultImage = 'assets/images/Restmuelltonne.png';
+          displayCategory = 'Restmüll';
           break;
         case 'Glas':
           _resultText = 'Altglas';
           _resultSubtitle = 'Unterscheidung zwischen Bunt- und Weißglas!';
           _resultColor = Colors.teal;
           _resultImage = 'assets/images/Altglascontainer.png';
+          displayCategory = 'Altglas';
           break;
         default:
           _resultText = 'Nicht erkannt';
           _resultSubtitle = null;
           _resultColor = Colors.grey;
           _resultImage = null;
+          displayCategory = 'Unbekannt';
+      }
+      
+      if (displayCategory.isNotEmpty && displayCategory != 'Unbekannt') {
+        _saveToHistory(displayCategory, probability);
       }
     });
   }
@@ -376,6 +402,17 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         backgroundColor: AppColors.darkGreen,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history, size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryScreen()),
+              );
+            },
+            tooltip: 'Scan-Verlauf',
+            color: Colors.white,
+          ),
           IconButton(
             icon: const Icon(Icons.library_books_outlined, size: 28),
             onPressed: () {
