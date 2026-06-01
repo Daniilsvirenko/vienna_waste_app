@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
-import "package:flutter/material.dart";
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -9,6 +10,35 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'app_colors.dart';
 import 'database_helper.dart';
 import 'history_screen.dart';
+import 'app_colors.dart'; // Твой файл с цветами
+
+// 🚀 МАКСИМАЛЬНАЯ ОПТИМИЗАЦИЯ: Функция вне класса для работы в Isolate
+// Используем одномерный Float32List вместо List<List<List<List<double>>>>
+// Это в несколько раз быстрее и требует меньше памяти.
+Float32List processImageFast(Uint8List imageBytes) {
+  img.Image? oriImage = img.decodeImage(imageBytes);
+  if (oriImage == null) throw Exception('Failed to decode image');
+
+  // Делаем квадратный кроп и сжимаем до 224x224
+  int minLength = oriImage.width < oriImage.height ? oriImage.width : oriImage.height;
+  int x = (oriImage.width - minLength) ~/ 2;
+  int y = (oriImage.height - minLength) ~/ 2;
+  img.Image croppedImage = img.copyCrop(oriImage, x: x, y: y, width: minLength, height: minLength);
+  img.Image resizedImage = img.copyResize(croppedImage, width: 224, height: 224);
+
+  // Создаем плоский массив на 150 528 элементов (1 * 224 * 224 * 3)
+  var tensorInput = Float32List(1 * 224 * 224 * 3);
+  int index = 0;
+  for (int y = 0; y < 224; y++) {
+    for (int x = 0; x < 224; x++) {
+      var pixel = resizedImage.getPixel(x, y);
+      tensorInput[index++] = pixel.r.toDouble();
+      tensorInput[index++] = pixel.g.toDouble();
+      tensorInput[index++] = pixel.b.toDouble();
+    }
+  }
+  return tensorInput;
+}
 
 void main() {
   runApp(const ViennaWasteApp());
@@ -49,49 +79,90 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   Interpreter? _interpreter;
   List<String> _labels = [];
 
-  String _resultText = 'Müll fotografieren\noder aus Galerie wählen';
+  String _resultText = 'Modell wird geladen...';
   String? _resultSubtitle;
   Color _resultColor = Colors.grey;
   String? _resultImage;
   bool _isAnalyzing = false;
+  bool _isModelLoaded = false; // Блокировка UI до загрузки модели
 
   @override
   void initState() {
     super.initState();
-    _loadModel();
-    _loadLabels();
+    _initAI();
   }
 
+  // ✅ Очистка памяти при закрытии
+  @override
+  void dispose() {
+    _interpreter?.close();
+    super.dispose();
+  }
+
+  // ✅ Инициализация с обработкой ошибок
+  Future<void> _initAI() async {
+    await _loadModel();
+    await _loadLabels();
+    
+    if (_interpreter != null && _labels.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _isModelLoaded = true;
+          _resultText = 'Müll fotografieren\noder aus Galerie wählen';
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _resultText = 'Kritischer Fehler: AI nicht geladen.\nBitte App neu starten.';
+          _resultColor = Colors.red;
+        });
+      }
+    }
+  }
+
+  // ✅ Загружаем актуальную V3 модель
   Future<void> _loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V2.tflite');
+      _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V3.tflite');
     } catch (e) {
       debugPrint("Error loading model: $e");
     }
   }
 
+  // ✅ Загружаем текстовый файл V3 (8 классов)
   Future<void> _loadLabels() async {
     try {
-      final labelData = await rootBundle.loadString('assets/labels.txt');
-      _labels = labelData.split('\n').where((s) => s.isNotEmpty).toList();
+      final labelData = await rootBundle.loadString('assets/labels_v3.txt');
+      _labels = labelData.split('\n').where((s) => s.trim().isNotEmpty).toList();
     } catch (e) {
       debugPrint("Error loading labels: $e");
     }
   }
 
   Future<void> pickImage(ImageSource source) async {
-    if (_isAnalyzing) return;
+    // Защита: нельзя нажать, пока идет анализ или не загружена модель
+    if (_isAnalyzing || !_isModelLoaded) return;
 
-    final pickedFile = await picker.pickImage(source: source);
+    // imageQuality: 85 ускорит загрузку тяжелых фото
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 400,
+      maxHeight: 400,
+      imageQuality: 85,
+    );
+    
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
         _resultText = 'Foto wird analysiert...';
+        _resultSubtitle = null;
+        _resultImage = null;
         _resultColor = Colors.grey;
         _isAnalyzing = true;
       });
 
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 100)); // Даем UI отрисоваться
       _classifyImage(_image!);
     }
   }
@@ -99,39 +170,40 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   Future<void> _classifyImage(File imageFile) async {
     if (_interpreter == null || _labels.isEmpty) return;
 
-    var imageBytes = await imageFile.readAsBytes();
+    try {
+      var imageBytes = await imageFile.readAsBytes();
 
-    var input = await Isolate.run(() {
-      img.Image? oriImage = img.decodeImage(imageBytes);
-      img.Image resizedImage = img.copyResize(oriImage!, width: 224, height: 224);
+      // Отправляем конвертацию в фон
+      var flatInput = await Isolate.run(() => processImageFast(imageBytes));
+      // Формируем нужную размерность для TFLite
+      var input = flatInput.reshape([1, 224, 224, 3]);
 
-      var tensorInput = List.generate(1, (i) => List.generate(224, (j) => List.generate(224, (k) => List.generate(3, (l) => 0.0))));
-      for (int y = 0; y < 224; y++) {
-        for (int x = 0; x < 224; x++) {
-          var pixel = resizedImage.getPixel(x, y);
-          tensorInput[0][y][x][0] = pixel.r.toDouble();
-          tensorInput[0][y][x][1] = pixel.g.toDouble();
-          tensorInput[0][y][x][2] = pixel.b.toDouble();
+      // ✅ ИСПРАВЛЕНИЕ: Выделяем память ровно под 8 классов модели V3!
+      var output = List.generate(1, (_) => List.filled(8, 0.0));
+
+      _interpreter!.run(input, output);
+
+      List<double> probabilities = output[0].cast<double>();
+      int maxIndex = 0;
+      double maxProb = probabilities[0];
+      for (int i = 1; i < probabilities.length; i++) {
+        if (probabilities[i] > maxProb) {
+          maxProb = probabilities[i];
+          maxIndex = i;
         }
       }
-      return tensorInput;
-    });
 
-    var output = List.filled(1 * 6, 0.0).reshape([1, 6]);
-
-    _interpreter!.run(input, output);
-
-    List<double> probabilities = (output[0] as List).cast<double>();
-    int maxIndex = 0;
-    double maxProb = probabilities[0];
-    for (int i = 1; i < probabilities.length; i++) {
-      if (probabilities[i] > maxProb) {
-        maxProb = probabilities[i];
-        maxIndex = i;
-      }
+      if (!mounted) return;
+      _applyViennaRules(_labels[maxIndex], maxProb);
+    } catch (e) {
+      debugPrint('Error in classification: $e');
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _resultText = 'Fehler bei Analyse';
+        _resultColor = Colors.red;
+      });
     }
-
-    _applyViennaRules(_labels[maxIndex], maxProb);
   }
 
   Future<void> _saveToHistory(String category, double probability) async {
@@ -150,26 +222,40 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       _isAnalyzing = false;
       _resultSubtitle = null; // Zurücksetzen, damit alte Hinweise verschwinden
 
+      // Улучшенная подсказка при низкой уверенности ИИ
       if (probability < 0.6) {
-        _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
+        String hint = "Bitte näher fotografieren.";
+        if (probability > 0.45) {
+          hint = "Ziemlich unsicher. Versuchen Sie, das Objekt um 90 Grad zu drehen oder das Licht zu verbessern.";
+        }
+        _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\n$hint';
         _resultSubtitle = null;
-        _resultColor = Colors.grey;
+        _resultColor = Colors.orange;
         _resultImage = null;
         return;
       }
 
       String displayCategory = "";
+      // ✅ Добавлены новые классы V3: Papier_Rollen и Metall
       switch (category.trim()) {
         case 'Altpapier':
+        case 'Papier_Rollen':
           _resultText = 'Altpapier / Karton!';
           _resultSubtitle = 'Ausnahmen:\nTetra Paks kommen in die Gelbe Tonne\nSchmutziger Karton (Pizza) kommt in den Restmüll';
           _resultColor = Colors.red;
           _resultImage = 'assets/images/AltpapierTonne.png';
           displayCategory = 'Altpapier';
+          
+          // Вызов контекстной подсказки (интерактивность)
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted) _showDirtyPaperWarning();
+          });
           break;
         case 'Plastik_Rigid':
         case 'Plastik_Soft':
+        case 'Metall':
           _resultText = 'Gelbe Tonne';
+          _resultSubtitle = 'Plastik & Metallverpackungen';
           _resultColor = Colors.amber;
           _resultImage = 'assets/images/gelbeTonne.png';
           displayCategory = 'Gelbe Tonne';
@@ -209,6 +295,44 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     });
   }
 
+  // Фильтр для предотвращения попадания грязной коробки пиццы в бумагу
+  void _showDirtyPaperWarning() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('⚠️ Kurze Frage', textAlign: TextAlign.center),
+        content: const Text(
+          'Hat das Papier oder der Karton Speisereste, Öl oder starken Schmutz (z.B. benutzte Pizzakartons)?',
+          style: TextStyle(fontSize: 16),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black87),
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _resultText = 'Restmüll!';
+                _resultSubtitle = 'Schmutziges Papier darf nicht recycelt werden.';
+                _resultColor = Colors.black87;
+                _resultImage = 'assets/images/Restmuelltonne.png';
+              });
+            },
+            child: const Text('Ja (Schmutzig)', style: TextStyle(color: Colors.white)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Nein (Sauber)', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showInstructions() {
     showDialog(
       context: context,
@@ -231,8 +355,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               TextSpan(
-                text: '\nGreenLens kann Fehler machen. Im Zweifelsfall gelten die offiziellen Trennregeln der Stadt Wien. Sondermüll- oder Problemstoffe'
-                    ' werden nicht von der KI unterstützt!',
+                text: '\nGreenLens kann Fehler machen. Im Zweifelsfall gelten die offiziellen Trennregeln der Stadt Wien. Sondermüll- oder Problemstoffe werden nicht von der KI unterstützt!',
               ),
             ],
           ),
@@ -254,7 +377,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         title: const Text('ESBN', textAlign: TextAlign.center),
-        content: const Text('ESBN', textAlign: TextAlign.center),
+        content: const Text('ESBN (Barcode-Scan wird bald hinzugefügt)', textAlign: TextAlign.center),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -401,11 +524,11 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
             Expanded(
               child: FloatingActionButton.extended(
                 heroTag: "ean_btn",
-                onPressed: _isAnalyzing ? null : _showESBNDialog,
-                elevation: _isAnalyzing ? 0 : 6,
+                onPressed: (_isAnalyzing || !_isModelLoaded) ? null : _showESBNDialog,
+                elevation: (_isAnalyzing || !_isModelLoaded) ? 0 : 6,
                 icon: const Icon(Icons.qr_code_scanner),
                 label: const Text('ESBN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.greenLensBlack,
+                backgroundColor: (_isAnalyzing || !_isModelLoaded) ? Colors.grey.shade400 : AppColors.greenLensBlack,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -413,11 +536,11 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
             Expanded(
               child: FloatingActionButton.extended(
                 heroTag: "camera_btn",
-                onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.camera),
-                elevation: _isAnalyzing ? 0 : 6,
+                onPressed: (_isAnalyzing || !_isModelLoaded) ? null : () => pickImage(ImageSource.camera),
+                elevation: (_isAnalyzing || !_isModelLoaded) ? 0 : 6,
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('Kamera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.darkGreen,
+                backgroundColor: (_isAnalyzing || !_isModelLoaded) ? Colors.grey.shade400 : AppColors.darkGreen,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -425,11 +548,11 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
             Expanded(
               child: FloatingActionButton.extended(
                 heroTag: "gallery_btn",
-                onPressed: _isAnalyzing ? null : () => pickImage(ImageSource.gallery),
-                elevation: _isAnalyzing ? 0 : 6,
+                onPressed: (_isAnalyzing || !_isModelLoaded) ? null : () => pickImage(ImageSource.gallery),
+                elevation: (_isAnalyzing || !_isModelLoaded) ? 0 : 6,
                 icon: const Icon(Icons.photo_library),
                 label: const Text('Galerie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: _isAnalyzing ? Colors.grey.shade400 : AppColors.greenLensBlack,
+                backgroundColor: (_isAnalyzing || !_isModelLoaded) ? Colors.grey.shade400 : AppColors.greenLensBlack,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -440,6 +563,10 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     );
   }
 }
+
+// -------------------------------------------------------------
+// Дальше идет неизменный код экрана WasteInfoScreen
+// -------------------------------------------------------------
 
 class WasteInfoScreen extends StatelessWidget {
   const WasteInfoScreen({super.key});
@@ -633,7 +760,7 @@ class WasteInfoScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: bin['color'] == Colors.amber ? AppColors.gelbeTonneGelb: bin['color'],
+                color: bin['color'] == Colors.amber ? AppColors.gelbeTonneGelb : bin['color'],
               ),
             ),
           ],
