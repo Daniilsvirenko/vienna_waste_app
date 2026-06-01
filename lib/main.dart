@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -12,9 +11,8 @@ import 'database_helper.dart';
 import 'history_screen.dart';
 import 'app_colors.dart'; // Твой файл с цветами
 
-// 🚀 МАКСИМАЛЬНАЯ ОПТИМИЗАЦИЯ: Функция вне класса для работы в Isolate
-// Используем одномерный Float32List вместо List<List<List<List<double>>>>
-// Это в несколько раз быстрее и требует меньше памяти.
+// 🚀 Image processing helper - optimized for speed
+// Uses one-dimensional Float32List for efficiency
 Float32List processImageFast(Uint8List imageBytes) {
   img.Image? oriImage = img.decodeImage(imageBytes);
   if (oriImage == null) throw Exception('Failed to decode image');
@@ -173,12 +171,12 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     try {
       var imageBytes = await imageFile.readAsBytes();
 
-      // Отправляем конвертацию в фон
-      var flatInput = await Isolate.run(() => processImageFast(imageBytes));
-      // Формируем нужную размерность для TFLite
+      // ✅ Process image on main thread (fast enough for 224x224)
+      var flatInput = processImageFast(imageBytes);
+      // Reshape for TFLite
       var input = flatInput.reshape([1, 224, 224, 3]);
 
-      // ✅ ИСПРАВЛЕНИЕ: Выделяем память ровно под 8 классов модели V3!
+      // ✅ Output buffer for 8 classes (V3 model)
       var output = List.generate(1, (_) => List.filled(8, 0.0));
 
       _interpreter!.run(input, output);

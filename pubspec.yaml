@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
-  tflite_flutter: ^0.11.0
+  tflite_flutter: ^0.12.1
   image: ^4.1.7          # <-- Добавь вот эту строчку
   sqflite: ^2.3.0
   path: ^1.8.3
@@ -68,7 +68,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/vienna_waste_model_V2.tflite
+    - assets/vienna_waste_model_V3.tflite
     - assets/labels.txt
     - assets/images/
 
