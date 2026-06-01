@@ -65,7 +65,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/vienna_waste_model_V2.tflite
+    - assets/vienna_waste_model_V3.tflite
     - assets/labels.txt
     - assets/images/
 
