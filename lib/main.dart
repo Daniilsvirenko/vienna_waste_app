@@ -133,7 +133,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   // ✅ Загружаем текстовый файл V3 (8 классов)
   Future<void> _loadLabels() async {
     try {
-      final labelData = await rootBundle.loadString('assets/labels_v3.txt');
+      final labelData = await rootBundle.loadString('assets/labels.txt');
       _labels = labelData.split('\n').where((s) => s.trim().isNotEmpty).toList();
     } catch (e) {
       debugPrint("Error loading labels: $e");
