@@ -148,6 +148,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   void _applyViennaRules(String category, double probability) {
     setState(() {
       _isAnalyzing = false;
+      _resultSubtitle = null; // Zurücksetzen, damit alte Hinweise verschwinden
 
       if (probability < 0.6) {
         _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\nBitte näher fotografieren.';
@@ -161,7 +162,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
       switch (category.trim()) {
         case 'Altpapier':
           _resultText = 'Altpapier / Karton!';
-          _resultSubtitle = 'AUSNAHMEN:\nTetra Paks kommen Gelbe Tonne\nSchmutziger Karton (Pizza) kommt in den Restmüll';
+          _resultSubtitle = 'Ausnahmen:\nTetra Paks kommen in die Gelbe Tonne\nSchmutziger Karton (Pizza) kommt in den Restmüll';
           _resultColor = Colors.red;
           _resultImage = 'assets/images/AltpapierTonne.png';
           displayCategory = 'Altpapier';
