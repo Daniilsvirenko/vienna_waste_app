@@ -179,12 +179,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Verlauf leeren?'),
-        content: const Text('Möchten Sie wirklich alle Einträge aus dem Verlauf löschen?'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Verlauf leeren?', textAlign: TextAlign.center),
+        content: const Text(
+          'Möchten Sie wirklich alle Einträge aus dem Verlauf löschen?',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
+            child: const Text('Abbrechen', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
           ),
           TextButton(
             onPressed: () async {
@@ -192,7 +198,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Navigator.pop(context);
               _loadHistory();
             },
-            child: const Text('Löschen', style: TextStyle(color: Colors.red)),
+            child: const Text('Löschen', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

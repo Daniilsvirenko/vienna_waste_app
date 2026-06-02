@@ -9,22 +9,20 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'app_colors.dart';
 import 'database_helper.dart';
 import 'history_screen.dart';
-import 'app_colors.dart'; // Твой файл с цветами
 
-// 🚀 Image processing helper - optimized for speed
-// Uses one-dimensional Float32List for efficiency
+// Image processing helper - optimized for spee Uses one-dimensional Float32List for efficiency
 Float32List processImageFast(Uint8List imageBytes) {
   img.Image? oriImage = img.decodeImage(imageBytes);
   if (oriImage == null) throw Exception('Failed to decode image');
 
-  // Делаем квадратный кроп и сжимаем до 224x224
+  // Perform square crop and resize to 224x224
   int minLength = oriImage.width < oriImage.height ? oriImage.width : oriImage.height;
   int x = (oriImage.width - minLength) ~/ 2;
   int y = (oriImage.height - minLength) ~/ 2;
   img.Image croppedImage = img.copyCrop(oriImage, x: x, y: y, width: minLength, height: minLength);
   img.Image resizedImage = img.copyResize(croppedImage, width: 224, height: 224);
 
-  // Создаем плоский массив на 150 528 элементов (1 * 224 * 224 * 3)
+  // Create flat array for 150,528 elements (1 * 224 * 224 * 3)
   var tensorInput = Float32List(1 * 224 * 224 * 3);
   int index = 0;
   for (int y = 0; y < 224; y++) {
@@ -82,7 +80,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   Color _resultColor = Colors.grey;
   String? _resultImage;
   bool _isAnalyzing = false;
-  bool _isModelLoaded = false; // Блокировка UI до загрузки модели
+  bool _isModelLoaded = false; // Blocking UI until model is loaded
 
   @override
   void initState() {
@@ -90,14 +88,14 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     _initAI();
   }
 
-  // ✅ Очистка памяти при закрытии
+  // ✅ Memory cleanup on close
   @override
   void dispose() {
     _interpreter?.close();
     super.dispose();
   }
 
-  // ✅ Инициализация с обработкой ошибок
+  // ✅ Initialization with error handling
   Future<void> _initAI() async {
     await _loadModel();
     await _loadLabels();
@@ -119,7 +117,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     }
   }
 
-  // ✅ Загружаем актуальную V3 модель
+  // Load actual V3 model
   Future<void> _loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset('assets/vienna_waste_model_V3.tflite');
@@ -128,7 +126,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     }
   }
 
-  // ✅ Загружаем текстовый файл V3 (8 классов)
+  // Load text file V3 (8 classes)
   Future<void> _loadLabels() async {
     try {
       final labelData = await rootBundle.loadString('assets/labels.txt');
@@ -139,10 +137,10 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   }
 
   Future<void> pickImage(ImageSource source) async {
-    // Защита: нельзя нажать, пока идет анализ или не загружена модель
+    // Protection: cannot press while analysis is ongoing or model is not loaded
     if (_isAnalyzing || !_isModelLoaded) return;
 
-    // imageQuality: 85 ускорит загрузку тяжелых фото
+    // imageQuality: 85 speeds up loading of heavy photos
     final pickedFile = await picker.pickImage(
       source: source,
       maxWidth: 400,
@@ -160,7 +158,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         _isAnalyzing = true;
       });
 
-      await Future.delayed(const Duration(milliseconds: 100)); // Даем UI отрисоваться
+      await Future.delayed(const Duration(milliseconds: 100)); // Let UI render
       _classifyImage(_image!);
     }
   }
@@ -171,12 +169,12 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     try {
       var imageBytes = await imageFile.readAsBytes();
 
-      // ✅ Process image on main thread (fast enough for 224x224)
+      // Process image on main thread (fast enough for 224x224)
       var flatInput = processImageFast(imageBytes);
       // Reshape for TFLite
       var input = flatInput.reshape([1, 224, 224, 3]);
 
-      // ✅ Output buffer for 8 classes (V3 model)
+      // Output buffer for 8 classes (V3 model)
       var output = List.generate(1, (_) => List.filled(8, 0.0));
 
       _interpreter!.run(input, output);
@@ -218,9 +216,9 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   void _applyViennaRules(String category, double probability) {
     setState(() {
       _isAnalyzing = false;
-      _resultSubtitle = null; // Zurücksetzen, damit alte Hinweise verschwinden
+      _resultSubtitle = null; // Reset to clear old hints
 
-      // Улучшенная подсказка при низкой уверенности ИИ
+      // Enhanced hint for low AI confidence
       if (probability < 0.6) {
         String hint = "Bitte näher fotografieren.";
         if (probability > 0.45) {
@@ -228,26 +226,21 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
         }
         _resultText = 'Nicht sicher (${(probability * 100).toStringAsFixed(0)}%).\n$hint';
         _resultSubtitle = null;
-        _resultColor = Colors.orange;
+        _resultColor = Colors.grey;
         _resultImage = null;
         return;
       }
 
       String displayCategory = "";
-      // ✅ Добавлены новые классы V3: Papier_Rollen и Metall
+      // Added new V3 classes: Papier_Rollen and Metall
       switch (category.trim()) {
         case 'Altpapier':
         case 'Papier_Rollen':
           _resultText = 'Altpapier / Karton!';
-          _resultSubtitle = 'Ausnahmen:\nTetra Paks kommen in die Gelbe Tonne\nSchmutziger Karton (Pizza) kommt in den Restmüll';
+          _resultSubtitle = 'Achtung:\nTetra Paks kommen in die Gelbe Tonne\nPapier oder Karton mit Ölflecken darf nicht recyclet werden';
           _resultColor = Colors.red;
           _resultImage = 'assets/images/AltpapierTonne.png';
           displayCategory = 'Altpapier';
-          
-          // Вызов контекстной подсказки (интерактивность)
-          Future.delayed(const Duration(milliseconds: 600), () {
-            if (mounted) _showDirtyPaperWarning();
-          });
           break;
         case 'Plastik_Rigid':
         case 'Plastik_Soft':
@@ -259,14 +252,14 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
           displayCategory = 'Gelbe Tonne';
           break;
         case 'Biomuell':
-          _resultText = 'Biomüll!';
+          _resultText = 'Biomüll';
           _resultSubtitle = null;
           _resultColor = Colors.brown;
           _resultImage = 'assets/images/Biomuelltonne.png';
           displayCategory = 'Biomüll';
           break;
         case 'Restmuell':
-          _resultText = 'Restmüll!';
+          _resultText = 'Restmüll';
           _resultSubtitle = null;
           _resultColor = Colors.black87;
           _resultImage = 'assets/images/Restmuelltonne.png';
@@ -293,16 +286,16 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
     });
   }
 
-  // Фильтр для предотвращения попадания грязной коробки пиццы в бумагу
+  // Filter to prevent dirty pizza boxes from entering paper bin
   void _showDirtyPaperWarning() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        title: const Text('⚠️ Kurze Frage', textAlign: TextAlign.center),
+        title: const Text('Kurze Frage', textAlign: TextAlign.center),
         content: const Text(
-          'Hat das Papier oder der Karton Speisereste, Öl oder starken Schmutz (z.B. benutzte Pizzakartons)?',
+          'Ist das Papier oder der Karton verschmutzt (z. B. durch Fett oder Ölflecken wie bei einem Pizzakarton)?',
           style: TextStyle(fontSize: 16),
           textAlign: TextAlign.center,
         ),
@@ -322,7 +315,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
             child: const Text('Ja (Schmutzig)', style: TextStyle(color: Colors.white)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black87),
             onPressed: () => Navigator.pop(context),
             child: const Text('Nein (Sauber)', style: TextStyle(color: Colors.white)),
           ),
@@ -463,7 +456,12 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                   decoration: BoxDecoration(
                     color: _resultColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _resultColor.withValues(alpha: 0.5), width: 2),
+                    border: Border.all(
+                      color: _resultColor == Colors.grey
+                          ? Colors.grey[700]!
+                          : _resultColor.withValues(alpha: 0.5),
+                      width: 2,
+                    ),
                     boxShadow: [
                       BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 10, spreadRadius: 2)
                     ],
@@ -563,7 +561,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
 }
 
 // -------------------------------------------------------------
-// Дальше идет неизменный код экрана WasteInfoScreen
+// WasteInfoScreen code below
 // -------------------------------------------------------------
 
 class WasteInfoScreen extends StatelessWidget {
@@ -653,7 +651,7 @@ class WasteInfoScreen extends StatelessWidget {
         'title': 'Altglas',
         'color': Colors.teal,
         'image': 'assets/images/Altglascontainer.png',
-        'info': ' Die Altglassammlung erfolgt zum Großteil mit lärmgedämmten Behältern. Diese bestehen aus 2 voneinander getrennten Kammern für Weiß- und Buntglas.\n\n'
+        'info': 'Die Altglassammlung erfolgt zum Großteil mit lärmgedämmten Behältern. Diese bestehen aus 2 voneinander getrennten Kammern für Weiß- und Buntglas.\n\n'
             'Für den Weißglas-Behälter geeignet:\n'
             '• Ungefärbte Einwegflaschen, Konservengläser\n'
             '• Ungefärbte Kondensmilch- und Limonadenflaschen\n'
