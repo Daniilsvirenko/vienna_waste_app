@@ -783,7 +783,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
                 onPressed: (_isAnalyzing || !_isModelLoaded) ? null : _showESBNDialog,
                 elevation: (_isAnalyzing || !_isModelLoaded) ? 0 : 6,
                 icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('ESBN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text('EAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 backgroundColor: (_isAnalyzing || !_isModelLoaded) ? Colors.grey.shade400 : AppColors.greenLensBlack,
                 foregroundColor: Colors.white,
               ),
