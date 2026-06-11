@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart' show rootBundle;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'app_colors.dart';
 import 'database_helper.dart';
 import 'history_screen.dart';
@@ -79,6 +81,7 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   String? _resultSubtitle;
   Color _resultColor = Colors.grey;
   String? _resultImage;
+  String? _manualBarcode;
   bool _isAnalyzing = false;
   bool _isModelLoaded = false; // Blocking UI until model is loaded
 
@@ -362,21 +365,278 @@ class _TrashSorterScreenState extends State<TrashSorterScreen> {
   }
 
   void _showESBNDialog() {
+    final TextEditingController barcodeController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        title: const Text('ESBN', textAlign: TextAlign.center),
-        content: const Text('ESBN (Barcode-Scan wird bald hinzugefügt)', textAlign: TextAlign.center),
+        title: const Text('Barcode eingeben', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Geben Sie den Barcode des Produkts manuell ein:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: barcodeController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: 'Barcode (EAN/UPC)',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            child: const Text('Abbrechen', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.darkGreen,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (barcodeController.text.isNotEmpty) {
+                Navigator.pop(context);
+                _lookupBarcode(barcodeController.text);
+              }
+            },
+            child: const Text('Analyse'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _lookupBarcode(String barcode) async {
+    // Show a loading dialog so the main screen tile stays unchanged
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.green)),
+    );
+
+    try {
+      final response = await http.get(Uri.parse('https://world.openfoodfacts.org/api/v2/product/$barcode?fields=product_name,brands,packaging,packaging_tags,packagings,packaging_materials_tags'));
+      
+      if (mounted) Navigator.pop(context); // Close loading dialog
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 1 && data['product'] != null) {
+          final product = data['product'];
+          final productName = product['product_name'] ?? 'Unbekanntes Produkt';
+          
+          // Collect all possible packaging strings
+          List<String> hints = [];
+          
+          if (product['packaging'] != null) {
+            hints.add(product['packaging'].toString());
+          }
+          
+          if (product['packaging_tags'] != null && product['packaging_tags'] is List) {
+            hints.addAll((product['packaging_tags'] as List).map((e) => e.toString()));
+          }
+          
+          if (product['packaging_materials_tags'] != null && product['packaging_materials_tags'] is List) {
+            hints.addAll((product['packaging_materials_tags'] as List).map((e) => e.toString()));
+          }
+          
+          if (product['packagings'] != null && product['packagings'] is List) {
+            for (var p in product['packagings']) {
+              if (p['material'] != null) hints.add(p['material'].toString());
+              if (p['material_tags'] != null && p['material_tags'] is List) {
+                hints.addAll((p['material_tags'] as List).map((e) => e.toString()));
+              }
+            }
+          }
+          
+          final combinedHints = hints.join(' ').toLowerCase();
+          
+          if (combinedHints.trim().isEmpty) {
+            _showBarcodeErrorMessage('Für diesen Barcode kann keine Auskunft zur Mülltrennung gegeben werden.');
+          } else {
+            _applyWasteCategoryFromBarcode(productName, combinedHints);
+          }
+        } else {
+          _showBarcodeErrorMessage('Produkt nicht in der Datenbank gefunden.');
+        }
+      } else {
+        _showBarcodeErrorMessage('Fehler bei der Anfrage.');
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading dialog if error
+      _showBarcodeErrorMessage('Netzwerkfehler.');
+    }
+  }
+
+  void _showBarcodeErrorMessage(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Fehler', textAlign: TextAlign.center),
+        content: Text(message, textAlign: TextAlign.center),
+        actions: [
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getCategoryData(String category) {
+    switch (category.trim()) {
+      case 'Altpapier':
+      case 'Papier_Rollen':
+        return {
+          'text': 'Altpapier / Karton!',
+          'subtitle': 'Achtung:\nTetra Paks kommen in die Gelbe Tonne\nPapier oder Karton mit Ölflecken darf nicht recyclet werden',
+          'color': Colors.red,
+          'image': 'assets/images/AltpapierTonne.png',
+        };
+      case 'Plastik_Rigid':
+      case 'Plastik_Soft':
+      case 'Metall':
+        return {
+          'text': 'Gelbe Tonne',
+          'subtitle': 'Plastik & Metallverpackungen',
+          'color': Colors.amber,
+          'image': 'assets/images/gelbeTonne.png',
+        };
+      case 'Biomuell':
+        return {
+          'text': 'Biomüll',
+          'subtitle': null,
+          'color': Colors.brown,
+          'image': 'assets/images/Biomuelltonne.png',
+        };
+      case 'Restmuell':
+        return {
+          'text': 'Restmüll',
+          'subtitle': null,
+          'color': Colors.black87,
+          'image': 'assets/images/Restmuelltonne.png',
+        };
+      case 'Glas':
+        return {
+          'text': 'Altglas',
+          'subtitle': 'Unterscheidung zwischen Bunt- und Weißglas!',
+          'color': Colors.teal,
+          'image': 'assets/images/Altglascontainer.png',
+        };
+      default:
+        return {
+          'text': 'Nicht erkannt',
+          'subtitle': null,
+          'color': Colors.grey,
+          'image': null,
+        };
+    }
+  }
+
+  void _showResultDialog(String title, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (data['image'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 15),
+                child: Image.asset(data['image'], height: 100, fit: BoxFit.contain),
+              ),
+            Text(
+              data['text'],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: data['color'] == Colors.amber ? Colors.orange[800] : data['color'],
+              ),
+            ),
+            if (data['subtitle'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  data['subtitle'],
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, height: 1.3),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Verstanden',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyWasteCategoryFromBarcode(String productName, String packaging) {
+    String category = 'Restmüll'; // Default
+
+    // Priority 1: Metal (Yellow Bin in Vienna)
+    if (packaging.contains('metall') || packaging.contains('metal') || packaging.contains('alu') || 
+        packaging.contains('stahl') || packaging.contains('steel') || packaging.contains('dosen') || 
+        packaging.contains('can') || packaging.contains('tin')) {
+      category = 'Metall'; // Mapped to Gelbe Tonne
+    } 
+    // Priority 2: Plastic (Yellow Bin in Vienna)
+    else if (packaging.contains('plastik') || packaging.contains('plastic') || packaging.contains('kunststoff') ||
+             packaging.contains('pet') || packaging.contains('pp') || packaging.contains('pe') || 
+             packaging.contains('ps') || packaging.contains('pvc') || packaging.contains('folie') || 
+             packaging.contains('film') || packaging.contains('tetra') || packaging.contains('verbund')) {
+      category = 'Plastik_Rigid'; // Mapped to Gelbe Tonne
+    }
+    // Priority 3: Paper
+    else if (packaging.contains('papier') || packaging.contains('paper') || packaging.contains('pappe') || 
+             packaging.contains('cardboard') || packaging.contains('karton')) {
+      category = 'Altpapier';
+    }
+    // Priority 4: Glass
+    else if (packaging.contains('glas') || packaging.contains('glass')) {
+      category = 'Glas';
+    }
+    // Priority 5: Bio
+    else if (packaging.contains('bio')) {
+      category = 'Biomuell';
+    }
+
+    final data = _getCategoryData(category);
+    _showResultDialog(productName, data);
   }
 
   @override
