@@ -69,7 +69,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case 'Altpapier':
         return Colors.red;
       case 'Gelbe Tonne':
-        return AppColors.gelbeTonneGelb;
+        return AppColors.yellowBinColor;
       case 'Biomüll':
         return Colors.brown;
       case 'Restmüll':

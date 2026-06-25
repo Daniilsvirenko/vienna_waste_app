@@ -1016,7 +1016,7 @@ class WasteInfoScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: bin['color'] == Colors.amber ? AppColors.gelbeTonneGelb : bin['color'],
+                color: bin['color'] == Colors.amber ? AppColors.yellowBinColor : bin['color'],
               ),
             ),
           ],
